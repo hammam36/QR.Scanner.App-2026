@@ -11,17 +11,19 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
-
-const Color primaryColor = Color(0xFF3A2EC3);
+import 'package:qr_generator_and_scanner/ui/theme/app_theme.dart';
 
 const List<Color> qrColors = [
   Colors.white,
-  Colors.grey,
-  Colors.orange,
-  Colors.yellow,
-  Colors.green,
-  Colors.cyan,
-  Colors.purple,
+  Color(0xFFF3F4F6),
+  Color(0xFFE5E7EB),
+  Color(0xFFD1D5DB),
+  Color(0xFF553FB8),
+  Color(0xFF10B981),
+  Color(0xFF3B82F6),
+  Color(0xFF8B5CF6),
+  Color(0xFFF59E0B),
+  Color(0xFFEF4444),
 ];
 
 class QrGeneratorScreen extends StatefulWidget {
@@ -33,6 +35,7 @@ class QrGeneratorScreen extends StatefulWidget {
 
 class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
   final ScreenshotController _screenshotController = ScreenshotController();
+  final TextEditingController _textController = TextEditingController();
 
   String? _qrData;
   Color _qrColor = Colors.white;
@@ -41,12 +44,13 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
   bool get _hasQr => _qrData != null && _qrData!.isNotEmpty;
 
-  Future<Uint8List?> _captureQr({Duration delay = const Duration(milliseconds: 120)}) async {
+  Future<Uint8List?> _captureQr({
+    Duration delay = const Duration(milliseconds: 120),
+  }) async {
     if (!_hasQr) return null;
 
-    // Pakai delay di parameter plugin supaya tidak perlu tap 2x
     final imageBytes = await _screenshotController.capture(
-      delay: delay, // trik resmi dari package screenshot [web:37]
+      delay: delay,
       pixelRatio: MediaQuery.of(context).devicePixelRatio,
     );
 
@@ -60,7 +64,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
       final imageBytes = await _captureQr();
       if (imageBytes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal capture QR untuk share')),
+          const SnackBar(content: Text('Failed to capture QR for sharing')),
         );
         return;
       }
@@ -69,18 +73,18 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
         [
           XFile.fromData(
             imageBytes,
-            name: 'qrcode_${DateTime.now().millisecondsSinceEpoch}.png',
+            name: 'qrode_${DateTime.now().millisecondsSinceEpoch}.png',
             mimeType: 'image/png',
           ),
         ],
-        text: 'QR Code untuk: $_qrData\nDibuat dengan aplikasi QR S&G.',
-        subject: 'Share QR Code dari QR S&G',
+        text: 'QR Code generated with QRODE\nContent: $_qrData',
+        subject: 'QR Code from QRODE',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Terjadi error saat share: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error sharing QR: $e')));
     }
   }
 
@@ -90,38 +94,36 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
     setState(() => _isDownloading = true);
 
     try {
-      // Pakai delay sedikit lebih besar untuk memastikan render selesai
       final imageBytes = await _captureQr(
         delay: const Duration(milliseconds: 200),
       );
       if (imageBytes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal capture QR untuk download')),
+          const SnackBar(content: Text('Failed to capture QR for download')),
         );
         setState(() => _isDownloading = false);
         return;
       }
 
       final directory = await getApplicationDocumentsDirectory();
-      final fileName =
-          'qrcode_${DateTime.now().millisecondsSinceEpoch}.png';
+      final fileName = 'qrode_${DateTime.now().millisecondsSinceEpoch}.png';
       final filePath = '${directory.path}/$fileName';
 
       final file = File(filePath);
-      await file.writeAsBytes(imageBytes); // simpan Uint8List ke file PNG [web:22][web:26]
+      await file.writeAsBytes(imageBytes);
 
-      await OpenFile.open(filePath); // buka di viewer / file manager [web:28]
+      await OpenFile.open(filePath);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('QR berhasil disimpan: $fileName')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('QR saved: $fileName')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi error saat download: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Download error: $e')));
       }
     } finally {
       if (mounted) {
@@ -141,7 +143,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
       );
       if (imageBytes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal capture QR untuk PDF')),
+          const SnackBar(content: Text('Failed to capture QR for PDF')),
         );
         setState(() => _isGeneratingPdf = false);
         return;
@@ -159,7 +161,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
                 pw.Text(
-                  'QR Code Ticket',
+                  'QRODE - QR Code',
                   style: pw.TextStyle(
                     fontSize: 26,
                     fontWeight: pw.FontWeight.bold,
@@ -172,15 +174,11 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                     borderRadius: pw.BorderRadius.circular(16),
                     border: pw.Border.all(color: PdfColors.grey400, width: 1),
                   ),
-                  child: pw.Image(
-                    qrImage,
-                    width: 220,
-                    height: 220,
-                  ),
+                  child: pw.Image(qrImage, width: 220, height: 220),
                 ),
                 pw.SizedBox(height: 24),
                 pw.Text(
-                  'Link / Teks:',
+                  'Content:',
                   style: pw.TextStyle(
                     fontSize: 14,
                     fontWeight: pw.FontWeight.bold,
@@ -196,11 +194,8 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                 pw.Divider(),
                 pw.SizedBox(height: 8),
                 pw.Text(
-                  'Generated by Hammam Mubarak - QR S&G',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    color: PdfColors.grey700,
-                  ),
+                  'Generated by QRODE - ${DateTime.now().toString()}',
+                  style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
                 ),
               ],
             );
@@ -210,13 +205,13 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
       await Printing.layoutPdf(
         onLayout: (format) async => pdf.save(),
-        name: 'QR_Code_${DateTime.now().millisecondsSinceEpoch}.pdf',
-      ); // [web:10]
+        name: 'QRODE_QR_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Terjadi error saat generate PDF: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF generation error: $e')));
     } finally {
       if (mounted) {
         setState(() => _isGeneratingPdf = false);
@@ -225,227 +220,328 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
   }
 
   @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create QR', style: TextStyle(color: Colors.white)),
-        backgroundColor: primaryColor,
-        elevation: 0,
+        title: const Text('Create QR'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
-      ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Container(height: 220, color: primaryColor),
-              Expanded(child: Container(color: Colors.grey.shade50)),
-            ],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline_rounded),
+            onPressed: () {},
           ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              // QR Preview Card
+              Screenshot(
+                controller: _screenshotController,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: _qrColor,
+                    borderRadius: AppBorderRadius.xlarge,
+                    border: Border.all(
+                      color: AppColors.outlineVariant,
+                      width: 2,
                     ),
-                    child: Column(
-                      children: [
-                        Screenshot(
-                          controller: _screenshotController,
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: _qrColor,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.black12,
-                                width: 2,
+                    boxShadow: [AppShadows.medium],
+                  ),
+                  child: !_hasQr
+                      ? Column(
+                          children: [
+                            Icon(
+                              Icons.qr_code_2_rounded,
+                              size: 64,
+                              color: AppColors.textTertiary.withOpacity(0.5),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Enter content below to generate QR',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textTertiary,
                               ),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 12,
-                                  offset: Offset(0, 4),
-                                ),
-                              ],
+                              textAlign: TextAlign.center,
                             ),
-                            child: !_hasQr
-                                ? const Padding(
-                                    padding: EdgeInsets.all(40),
-                                    child: Text(
-                                      'Masukkan teks/link untuk generate QR',
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 16,
+                          ],
+                        )
+                      : PrettyQrView.data(
+                          data: _qrData!,
+                          decoration: const PrettyQrDecoration(
+                            shape: PrettyQrSmoothSymbol(
+                              color: Color(0xFF1A1A1A),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Input Section
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Content',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                              fontFamily: 'Manrope',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _textController,
+                            decoration: InputDecoration(
+                              hintText: 'Enter URL, text, or contact info...',
+                              filled: true,
+                              fillColor: AppColors.surfaceVariant,
+                              border: OutlineInputBorder(
+                                borderRadius: AppBorderRadius.large,
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.all(16),
+                              suffixIcon: _textController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear_rounded),
+                                      onPressed: () {
+                                        _textController.clear();
+                                        setState(() => _qrData = null);
+                                      },
+                                    )
+                                  : null,
+                            ),
+                            maxLines: 4,
+                            onChanged: (value) {
+                              setState(() {
+                                final trimmed = value.trim();
+                                _qrData = trimmed.isEmpty ? null : trimmed;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Enter any text, URL, or data to encode',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Color Selection
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Background Color',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                              fontFamily: 'Manrope',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 48,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: qrColors.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 12),
+                              itemBuilder: (context, index) {
+                                final color = qrColors[index];
+                                return GestureDetector(
+                                  onTap: () => setState(() => _qrColor = color),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      borderRadius: AppBorderRadius.medium,
+                                      border: Border.all(
+                                        color: _qrColor == color
+                                            ? AppColors.primary
+                                            : Colors.transparent,
+                                        width: 3,
                                       ),
-                                      textAlign: TextAlign.center,
+                                      boxShadow: _qrColor == color
+                                          ? [
+                                              BoxShadow(
+                                                color: AppColors.primary
+                                                    .withOpacity(0.3),
+                                                blurRadius: 8,
+                                                spreadRadius: 2,
+                                              ),
+                                            ]
+                                          : [AppShadows.small],
                                     ),
-                                  )
-                                : PrettyQrView.data(
-                                    data: _qrData!,
-                                    decoration: const PrettyQrDecoration(
-                                      shape: PrettyQrSmoothSymbol(),
-                                    ),
+                                    child: _qrColor == color
+                                        ? const Center(
+                                            child: Icon(
+                                              Icons.check_rounded,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                          )
+                                        : null,
                                   ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        TextField(
-                          decoration: InputDecoration(
-                            labelText: 'Link atau Teks',
-                            hintText:
-                                'https://example.com atau teks apa saja',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                                );
+                              },
                             ),
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
                           ),
-                          maxLines: 3,
-                          onChanged: (value) {
-                            setState(() {
-                              final trimmed = value.trim();
-                              _qrData = trimmed.isEmpty ? null : trimmed;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Pilih Warna Background QR',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: qrColors.map((color) {
-                            return GestureDetector(
-                              onTap: () => setState(() => _qrColor = color),
-                              child: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: _qrColor == color
-                                        ? Colors.black
-                                        : Colors.transparent,
-                                    width: 3,
-                                  ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black12,
-                                      blurRadius: 6,
+                        ],
+                      ),
+
+                      const SizedBox(height: 48),
+
+                      // Action Buttons
+                      _hasQr
+                          ? Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _hasQr && !_isDownloading
+                                            ? _downloadQr
+                                            : null,
+                                        icon: _isDownloading
+                                            ? SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: AppColors.primary,
+                                                    ),
+                                              )
+                                            : const Icon(
+                                                Icons.download_rounded,
+                                              ),
+                                        label: const Text('Save to Device'),
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: _hasQr && !_isGeneratingPdf
+                                            ? _generateAndPrintPdf
+                                            : null,
+                                        icon: _isGeneratingPdf
+                                            ? SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white,
+                                                    ),
+                                              )
+                                            : const Icon(Icons.print_rounded),
+                                        label: const Text('Print as PDF'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              AppColors.textPrimary,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 32),
-                        const Divider(height: 1),
-                        const SizedBox(height: 16),
-
-                        // Row: Reset + Share
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _qrData = null;
-                                    _qrColor = Colors.white;
-                                  });
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                ),
-                                child: const Text('Reset'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _hasQr ? _shareQr : null,
-                                icon: const Icon(Icons.share),
-                                label: const Text('Share'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Row: Download + Print
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _hasQr && !_isDownloading
-                                    ? _downloadQr
-                                    : null,
-                                icon: _isDownloading
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                                const SizedBox(height: 12),
+                                Column(
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: _hasQr ? _shareQr : null,
+                                      icon: const Icon(Icons.share_rounded),
+                                      label: const Text('Share QR Code'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.white,
+                                        minimumSize: const Size(
+                                          double.infinity,
+                                          56,
                                         ),
-                                      )
-                                    : const Icon(Icons.download),
-                                label: const Text('Download'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _hasQr && !_isGeneratingPdf
-                                    ? _generateAndPrintPdf
-                                    : null,
-                                icon: _isGeneratingPdf
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline_rounded,
+                                          size: 12,
+                                          color: AppColors.textTertiary,
                                         ),
-                                      )
-                                    : const Icon(Icons.print),
-                                label: const Text('Print'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.black87,
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'double klik untuk download instant',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textTertiary,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
+                              ],
+                            )
+                          : ElevatedButton.icon(
+                              onPressed: _hasQr ? _shareQr : null,
+                              icon: const Icon(Icons.qr_code_2_rounded),
+                              label: const Text('Generate QR Code'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(double.infinity, 56),
                               ),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
