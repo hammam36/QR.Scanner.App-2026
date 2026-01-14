@@ -1,8 +1,16 @@
+// lib/ui/qr_generator_screen.dart
+import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 const Color primaryColor = Color(0xFF3A2EC3);
 
@@ -28,6 +36,193 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
 
   String? _qrData;
   Color _qrColor = Colors.white;
+  bool _isGeneratingPdf = false;
+  bool _isDownloading = false;
+
+  bool get _hasQr => _qrData != null && _qrData!.isNotEmpty;
+
+  Future<Uint8List?> _captureQr({Duration delay = const Duration(milliseconds: 120)}) async {
+    if (!_hasQr) return null;
+
+    // Pakai delay di parameter plugin supaya tidak perlu tap 2x
+    final imageBytes = await _screenshotController.capture(
+      delay: delay, // trik resmi dari package screenshot [web:37]
+      pixelRatio: MediaQuery.of(context).devicePixelRatio,
+    );
+
+    return imageBytes;
+  }
+
+  Future<void> _shareQr() async {
+    if (!_hasQr) return;
+
+    try {
+      final imageBytes = await _captureQr();
+      if (imageBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal capture QR untuk share')),
+        );
+        return;
+      }
+
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            imageBytes,
+            name: 'qrcode_${DateTime.now().millisecondsSinceEpoch}.png',
+            mimeType: 'image/png',
+          ),
+        ],
+        text: 'QR Code untuk: $_qrData\nDibuat dengan aplikasi QR S&G.',
+        subject: 'Share QR Code dari QR S&G',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Terjadi error saat share: $e')),
+      );
+    }
+  }
+
+  Future<void> _downloadQr() async {
+    if (!_hasQr) return;
+
+    setState(() => _isDownloading = true);
+
+    try {
+      // Pakai delay sedikit lebih besar untuk memastikan render selesai
+      final imageBytes = await _captureQr(
+        delay: const Duration(milliseconds: 200),
+      );
+      if (imageBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal capture QR untuk download')),
+        );
+        setState(() => _isDownloading = false);
+        return;
+      }
+
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName =
+          'qrcode_${DateTime.now().millisecondsSinceEpoch}.png';
+      final filePath = '${directory.path}/$fileName';
+
+      final file = File(filePath);
+      await file.writeAsBytes(imageBytes); // simpan Uint8List ke file PNG [web:22][web:26]
+
+      await OpenFile.open(filePath); // buka di viewer / file manager [web:28]
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('QR berhasil disimpan: $fileName')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Terjadi error saat download: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
+    }
+  }
+
+  Future<void> _generateAndPrintPdf() async {
+    if (!_hasQr) return;
+
+    setState(() => _isGeneratingPdf = true);
+
+    try {
+      final imageBytes = await _captureQr(
+        delay: const Duration(milliseconds: 200),
+      );
+      if (imageBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal capture QR untuk PDF')),
+        );
+        setState(() => _isGeneratingPdf = false);
+        return;
+      }
+
+      final pdf = pw.Document();
+      final qrImage = pw.MemoryImage(imageBytes);
+
+      pdf.addPage(
+        pw.Page(
+          margin: const pw.EdgeInsets.all(32),
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Text(
+                  'QR Code Ticket',
+                  style: pw.TextStyle(
+                    fontSize: 26,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 24),
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(16),
+                  decoration: pw.BoxDecoration(
+                    borderRadius: pw.BorderRadius.circular(16),
+                    border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                  ),
+                  child: pw.Image(
+                    qrImage,
+                    width: 220,
+                    height: 220,
+                  ),
+                ),
+                pw.SizedBox(height: 24),
+                pw.Text(
+                  'Link / Teks:',
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  _qrData ?? '-',
+                  style: const pw.TextStyle(fontSize: 12),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.Spacer(),
+                pw.Divider(),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Generated by Hammam Mubarak - QR S&G',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+        name: 'QR_Code_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      ); // [web:10]
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Terjadi error saat generate PDF: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingPdf = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +283,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                                 ),
                               ],
                             ),
-                            child: _qrData == null || _qrData!.isEmpty
+                            child: !_hasQr
                                 ? const Padding(
                                     padding: EdgeInsets.all(40),
                                     child: Text(
@@ -112,7 +307,8 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                         TextField(
                           decoration: InputDecoration(
                             labelText: 'Link atau Teks',
-                            hintText: 'https://example.com atau teks apa saja',
+                            hintText:
+                                'https://example.com atau teks apa saja',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -121,11 +317,10 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                           ),
                           maxLines: 3,
                           onChanged: (value) {
-                            setState(
-                              () => _qrData = value.trim().isEmpty
-                                  ? null
-                                  : value.trim(),
-                            );
+                            setState(() {
+                              final trimmed = value.trim();
+                              _qrData = trimmed.isEmpty ? null : trimmed;
+                            });
                           },
                         ),
                         const SizedBox(height: 24),
@@ -152,7 +347,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                                         : Colors.transparent,
                                     width: 3,
                                   ),
-                                  boxShadow: [
+                                  boxShadow: const [
                                     BoxShadow(
                                       color: Colors.black12,
                                       blurRadius: 6,
@@ -166,6 +361,8 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                         const SizedBox(height: 32),
                         const Divider(height: 1),
                         const SizedBox(height: 16),
+
+                        // Row: Reset + Share
                         Row(
                           children: [
                             Expanded(
@@ -182,39 +379,60 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                                 child: const Text('Reset'),
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () async {
-                                  if (_qrData == null || _qrData!.isEmpty)
-                                    return;
-
-                                  // Delay kecil untuk render selesai
-                                  await Future.delayed(
-                                    const Duration(milliseconds: 100),
-                                  );
-
-                                  final Uint8List? imageBytes =
-                                      await _screenshotController.capture(
-                                        pixelRatio: MediaQuery.of(
-                                          context,
-                                        ).devicePixelRatio,
-                                      );
-
-                                  if (imageBytes != null) {
-                                    await Share.shareXFiles([
-                                      XFile.fromData(
-                                        imageBytes,
-                                        name: 'qrcode_dateTime.png',
-                                        mimeType: 'image/png',
-                                      ),
-                                    ]);
-                                  }
-                                },
+                                onPressed: _hasQr ? _shareQr : null,
                                 icon: const Icon(Icons.share),
-                                label: const Text('Share QR'),
+                                label: const Text('Share'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Row: Download + Print
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _hasQr && !_isDownloading
+                                    ? _downloadQr
+                                    : null,
+                                icon: _isDownloading
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.download),
+                                label: const Text('Download'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _hasQr && !_isGeneratingPdf
+                                    ? _generateAndPrintPdf
+                                    : null,
+                                icon: _isGeneratingPdf
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.print),
+                                label: const Text('Print'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black87,
                                 ),
                               ),
                             ),
