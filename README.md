@@ -1,16 +1,19 @@
-# qr_generator_and_scanner
+## 📱 QRGenius App
 
-A new Flutter project.
+QRGenius App adalah aplikasi Flutter sederhana untuk membuat dan mengelola QR Code secara praktis, dengan fokus pada tampilan yang rapi, UX yang nyaman, dan alur pembuatan QR yang efisien.
 
-## Getting Started
+![QRGenius App Mockup](docs/images/MockUp-QRGenius-App.png)
 
-This project is a starting point for a Flutter application.
+### ✨ Key Features
+- Generate QR Code dari teks, URL, atau data lain secara instan.
+- Scan QR Code menggunakan kamera untuk membaca konten secara langsung.
+- Bagikan QR Code dalam bentuk gambar ke aplikasi lain.
+- UI simpel dan modern yang cocok untuk portfolio dan demo project.
 
-A few resources to get you started if this is your first Flutter project:
+### 🛠 Tech Stack
+- Flutter (Dart)
+- QR generation & scanning packages (`pretty_qr_code`, `mobile_scanner`, dsb.)[web:16]
+- Material Design UI
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### 📌 Notes
+Project ini dibuat untuk tujuan belajar dan portfolio, dengan fokus pada Flutter UI, pengelolaan state sederhana, serta implementasi fitur generate dan scan QR Code end-to-end
